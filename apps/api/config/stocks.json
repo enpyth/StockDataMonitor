@@ -1,0 +1,32 @@
+{
+  "exchanges": [
+    {
+      "code": "NASDAQ",
+      "name": "Nasdaq Stock Market",
+      "timezone": "America/New_York",
+      "currency": "USD",
+      "symbols": ["AAPL", "MSFT", "NVDA"]
+    },
+    {
+      "code": "NYSE",
+      "name": "New York Stock Exchange",
+      "timezone": "America/New_York",
+      "currency": "USD",
+      "symbols": ["JPM", "JNJ", "KO"]
+    },
+    {
+      "code": "TSE",
+      "name": "Tokyo Stock Exchange",
+      "timezone": "Asia/Tokyo",
+      "currency": "JPY",
+      "symbols": ["7203.T", "6758.T", "8306.T"]
+    },
+    {
+      "code": "ASX",
+      "name": "Australian Securities Exchange",
+      "timezone": "Australia/Sydney",
+      "currency": "AUD",
+      "symbols": ["BHP.AX", "CBA.AX", "CSL.AX"]
+    }
+  ]
+}

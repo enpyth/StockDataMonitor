@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Quant stock universe",
+  "type": "object",
+  "required": ["exchanges"],
+  "additionalProperties": false,
+  "properties": {
+    "exchanges": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["code", "name", "timezone", "currency", "symbols"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "timezone": { "type": "string", "minLength": 1 },
+          "currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+          "symbols": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  }
+}
