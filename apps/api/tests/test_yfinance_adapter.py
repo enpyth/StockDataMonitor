@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pandas as pd
 
 from app.yfinance_adapter import (
@@ -42,14 +44,16 @@ def test_normalize_ohlcv_rows_converts_dataframe_values():
     ]
 
 
-def test_normalize_quote_snapshot_prefers_fast_info():
+def test_normalize_quote_snapshot_prefers_current_fast_info_price():
     quote = normalize_quote_snapshot(
         "security-id",
         "MSFT",
         "USD",
-        {"regularMarketPrice": 10, "regularMarketPreviousClose": 9},
-        {"last_price": 11, "previous_close": 10},
+        {"regularMarketPrice": 10, "currency": "USD", "marketState": "REGULAR"},
+        {"last_price": 11},
+        snapshot_date=pd.Timestamp("2026-09-18").date(),
     )
 
-    assert quote["price"] == 11
-    assert quote["previous_close"] == 10
+    assert quote["date"] == "2026-09-18"
+    assert quote["price"] == Decimal(11)
+    assert quote["market_state"] == "REGULAR"

@@ -24,21 +24,25 @@ def test_to_jsonable_converts_decimal_and_datetime_payloads():
 
 def test_quote_insert_payload_removes_transient_symbol_and_serializes_decimal():
     payload = _quote_insert_payload(
+        [
+            {
+                "security_id": "security-id",
+                "symbol": "AAPL",
+                "date": "2026-09-19",
+                "price": Decimal("123.45"),
+                "currency": "USD",
+                "market_state": "REGULAR",
+            }
+        ]
+    )
+
+    assert payload == [
         {
             "security_id": "security-id",
-            "symbol": "AAPL",
-            "price": Decimal("123.45"),
-            "previous_close": Decimal("120.00"),
+            "date": "2026-09-19",
+            "price": 123.45,
             "currency": "USD",
             "market_state": "REGULAR",
         }
-    )
-
-    assert payload == {
-        "security_id": "security-id",
-        "price": 123.45,
-        "previous_close": 120.0,
-        "currency": "USD",
-        "market_state": "REGULAR",
-    }
+    ]
     json.dumps(payload)

@@ -44,11 +44,12 @@ create table public.ohlcv_daily (
 create table public.quote_snapshots (
   id uuid primary key default gen_random_uuid(),
   security_id uuid not null references public.securities(id) on delete cascade,
+  date date not null,
   price numeric,
-  previous_close numeric,
   currency text not null,
   market_state text,
-  collected_at timestamptz not null default now()
+  collected_at timestamptz not null default now(),
+  unique (security_id, date)
 );
 
 create table public.ingestion_runs (
@@ -63,7 +64,7 @@ create table public.ingestion_runs (
 );
 
 create index ohlcv_daily_security_date_idx on public.ohlcv_daily (security_id, date desc);
-create index quote_snapshots_security_collected_idx on public.quote_snapshots (security_id, collected_at desc);
+create index quote_snapshots_security_date_idx on public.quote_snapshots (security_id, date desc);
 create index ingestion_runs_started_idx on public.ingestion_runs (started_at desc);
 
 alter table public.exchanges enable row level security;

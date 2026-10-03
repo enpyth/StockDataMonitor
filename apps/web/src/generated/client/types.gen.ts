@@ -143,13 +143,13 @@ export type QuoteSnapshot = {
      */
     symbol: string;
     /**
+     * Date
+     */
+    date: string;
+    /**
      * Price
      */
     price?: string | null;
-    /**
-     * Previous Close
-     */
-    previous_close?: string | null;
     /**
      * Currency
      */

@@ -31,8 +31,8 @@ class StockIngestionService:
                 profile = normalize_company_profile(symbol, exchange.code, exchange.currency, info)
                 security_id = self.repository.upsert_security(exchange_id, profile)
                 self.repository.upsert_ohlcv(normalize_ohlcv_rows(security_id, history))
-                self.repository.insert_quote(
-                    normalize_quote_snapshot(security_id, symbol, profile["currency"], info, fast_info)
+                self.repository.upsert_quotes(
+                    [normalize_quote_snapshot(security_id, symbol, profile["currency"], info, fast_info)]
                 )
                 succeeded += 1
             except Exception as exc:  # noqa: BLE001 - ingestion must isolate per-symbol failures

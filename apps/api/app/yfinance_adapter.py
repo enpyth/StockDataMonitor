@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -75,6 +75,7 @@ def normalize_quote_snapshot(
     currency: str,
     info: dict[str, Any],
     fast_info: Any,
+    snapshot_date: date | None = None,
 ) -> dict[str, Any]:
     def fast_get(key: str) -> Any:
         try:
@@ -88,17 +89,11 @@ def normalize_quote_snapshot(
         or info.get("regularMarketPrice")
         or info.get("currentPrice")
     )
-    previous_close = (
-        fast_get("previous_close")
-        or fast_get("previousClose")
-        or info.get("regularMarketPreviousClose")
-        or info.get("previousClose")
-    )
     return {
         "security_id": security_id,
         "symbol": symbol,
+        "date": (snapshot_date or datetime.now(UTC).date()).isoformat(),
         "price": decimal_or_none(price),
-        "previous_close": decimal_or_none(previous_close),
         "currency": info.get("currency") or currency,
         "market_state": info.get("marketState"),
     }

@@ -56,15 +56,17 @@ def test_stock_routes_with_overridden_auth_and_repository():
             }
         ]
     )
-    repository.insert_quote(
-        {
-            "security_id": security_id,
-            "price": 2,
-            "previous_close": 1,
-            "currency": "USD",
-            "market_state": "REGULAR",
-            "collected_at": datetime.now(UTC),
-        }
+    repository.upsert_quotes(
+        [
+            {
+                "security_id": security_id,
+                "date": "2026-09-17",
+                "price": 2,
+                "currency": "USD",
+                "market_state": "REGULAR",
+                "collected_at": datetime.now(UTC),
+            }
+        ]
     )
 
     app.dependency_overrides[require_user] = lambda: {"sub": "user-id"}
@@ -77,5 +79,6 @@ def test_stock_routes_with_overridden_auth_and_repository():
         assert client.get("/api/stocks/AAPL/ohlcv").json()[0]["volume"] == 100
         assert client.get("/api/stocks/AAPL/ohlcv/today?trading_date=2026-09-17").json()[0]["date"] == "2026-09-17"
         assert client.get("/api/quotes/latest").json()[0]["symbol"] == "AAPL"
+        assert client.get("/api/stocks/AAPL/prices").json()[0]["date"] == "2026-09-17"
     finally:
         app.dependency_overrides.clear()

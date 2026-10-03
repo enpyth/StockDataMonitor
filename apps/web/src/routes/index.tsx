@@ -1,21 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
 import {
-  Activity,
-  BarChart3,
   Database,
   LogIn,
   LogOut,
   Play,
   RefreshCcw,
   Search,
-  ShieldCheck,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { isAllowedUserEmail } from '../lib/access'
-import { loadDashboard, loadOhlcv, runIngestion, type DashboardData } from '../lib/api'
+import { loadDashboard, loadOhlcv, loadQuotePrices, runIngestion, type DashboardData } from '../lib/api'
 import type { OhlcvDaily, QuoteSnapshot, Security } from '../generated/client/types.gen'
 
 export const Route = createFileRoute('/')({ component: Home })
@@ -26,6 +23,7 @@ function Home() {
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [ohlcv, setOhlcv] = useState<OhlcvDaily[]>([])
+  const [quotePrices, setQuotePrices] = useState<QuoteSnapshot[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -74,8 +72,11 @@ function Home() {
   useEffect(() => {
     if (!token || !selectedSymbol) return
 
-    loadOhlcv(selectedSymbol, token)
-      .then(setOhlcv)
+    Promise.all([loadOhlcv(selectedSymbol, token), loadQuotePrices(selectedSymbol, token)])
+      .then(([nextOhlcv, nextQuotePrices]) => {
+        setOhlcv(nextOhlcv)
+        setQuotePrices(nextQuotePrices)
+      })
       .catch((error: Error) => setMessage(error.message))
   }, [token, selectedSymbol])
 
@@ -111,7 +112,12 @@ function Home() {
     try {
       const data = await loadDashboard(token)
       setDashboard(data)
-      setOhlcv(await loadOhlcv(selectedSymbol, token))
+      const [nextOhlcv, nextQuotePrices] = await Promise.all([
+        loadOhlcv(selectedSymbol, token),
+        loadQuotePrices(selectedSymbol, token),
+      ])
+      setOhlcv(nextOhlcv)
+      setQuotePrices(nextQuotePrices)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to refresh data')
     } finally {
@@ -172,34 +178,10 @@ function Home() {
 
   const selectedSecurity = dashboard?.stocks.find((stock) => stock.yahoo_symbol === selectedSymbol)
   const latestQuote = selectedSymbol ? quoteBySymbol.get(selectedSymbol) : undefined
+  const userEmail = session.user.email ?? 'Signed in'
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-row">
-          <Database size={24} />
-          <span>Quant v1</span>
-        </div>
-        <nav>
-          <a className="active">
-            <BarChart3 size={18} />
-            Stocks
-          </a>
-          <a>
-            <Activity size={18} />
-            Ingestion
-          </a>
-          <a>
-            <ShieldCheck size={18} />
-            Supabase
-          </a>
-        </nav>
-        <button className="ghost-button" type="button" onClick={() => supabase?.auth.signOut()}>
-          <LogOut size={18} />
-          Sign out
-        </button>
-      </aside>
-
       <section className="workspace">
         <header className="topbar">
           <div>
@@ -207,6 +189,7 @@ function Home() {
             <h1>Stock data monitor</h1>
           </div>
           <div className="topbar-actions">
+            <span className="user-email" title={userEmail}>{userEmail}</span>
             <button type="button" onClick={refreshData} disabled={loading}>
               <RefreshCcw size={17} />
               Refresh
@@ -214,6 +197,10 @@ function Home() {
             <button className="primary-button" type="button" onClick={triggerIngestion} disabled={loading}>
               <Play size={17} />
               Run ingestion
+            </button>
+            <button type="button" onClick={() => supabase?.auth.signOut()}>
+              <LogOut size={17} />
+              Log out
             </button>
           </div>
         </header>
@@ -244,7 +231,7 @@ function Home() {
           </div>
 
           <aside className="detail-region">
-            <SecurityDetail security={selectedSecurity} quote={latestQuote} rows={ohlcv} />
+            <SecurityDetail security={selectedSecurity} quote={latestQuote} ohlcvRows={ohlcv} priceRows={quotePrices} />
             <RunList runs={dashboard?.runs ?? []} />
           </aside>
         </section>
@@ -268,7 +255,7 @@ function SetupScreen() {
   )
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="metric">
       <span>{label}</span>
@@ -319,14 +306,16 @@ function StockTable({
 function SecurityDetail({
   security,
   quote,
-  rows,
+  ohlcvRows,
+  priceRows,
 }: {
   security: Security | undefined
   quote: QuoteSnapshot | undefined
-  rows: OhlcvDaily[]
+  ohlcvRows: OhlcvDaily[]
+  priceRows: QuoteSnapshot[]
 }) {
-  const orderedRows = [...rows].reverse()
-  const maxClose = Math.max(...orderedRows.map((row) => Number(row.close ?? 0)), 1)
+  const orderedPrices = [...priceRows].reverse()
+  const maxPrice = Math.max(...orderedPrices.map((row) => Number(row.price ?? 0)), 1)
 
   return (
     <section className="detail-panel">
@@ -338,24 +327,37 @@ function SecurityDetail({
         <span className="exchange-pill">{security?.exchange_code ?? '--'}</span>
       </div>
       <div className="quote-grid">
-        <Metric label="Last price" value={Number(quote?.price ?? 0)} />
-        <Metric label="Previous close" value={Number(quote?.previous_close ?? 0)} />
+        <Metric label="Last price" value={formatAmount(quote?.price)} />
+        <Metric label="Price rows" value={priceRows.length} />
       </div>
-      <div className="mini-chart" aria-label="Closing price history">
-        {orderedRows.slice(-42).map((row) => (
+      <div className="mini-chart" aria-label="Price history">
+        {orderedPrices.slice(-42).map((row) => (
           <span
             key={row.date}
-            title={`${row.date}: ${row.close ?? ''}`}
-            style={{ height: `${Math.max((Number(row.close ?? 0) / maxClose) * 100, 4)}%` }}
+            title={`${row.date}: ${formatAmount(row.price)}`}
+            style={{ height: `${Math.max((Number(row.price ?? 0) / maxPrice) * 100, 4)}%` }}
           />
         ))}
       </div>
-      <div className="ohlcv-list">
-        {rows.slice(0, 6).map((row) => (
+      <div className="price-list">
+        <h3>Price</h3>
+        {priceRows.slice(0, 6).map((row) => (
           <div key={row.date}>
             <span>{row.date}</span>
-            <strong>{row.close ?? '--'}</strong>
-            <small>{row.volume?.toLocaleString() ?? '--'} vol</small>
+            <strong>{formatMoney(row.price, row.currency)}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="ohlcv-list">
+        <h3>OHLCV</h3>
+        {ohlcvRows.slice(0, 6).map((row) => (
+          <div key={row.date}>
+            <span>{row.date}</span>
+            <strong>Close {formatAmount(row.close)}</strong>
+            <small>
+              O {formatAmount(row.open)} / H {formatAmount(row.high)} / L {formatAmount(row.low)} / V{' '}
+              {row.volume?.toLocaleString() ?? '--'}
+            </small>
           </div>
         ))}
       </div>
@@ -384,5 +386,19 @@ function RunList({ runs }: { runs: Array<{ id: string; status: string; started_a
 function formatMoney(value: unknown, currency: string) {
   const number = Number(value)
   if (!Number.isFinite(number) || number === 0) return '--'
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(number)
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number)
+}
+
+function formatAmount(value: unknown) {
+  const number = Number(value)
+  if (!Number.isFinite(number) || number === 0) return '--'
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number)
 }

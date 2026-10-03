@@ -47,8 +47,8 @@ class OhlcvDaily(BaseModel):
 
 class QuoteSnapshot(BaseModel):
     symbol: str
+    date: date
     price: Decimal | None = None
-    previous_close: Decimal | None = None
     currency: str
     market_state: str | None = None
     collected_at: datetime

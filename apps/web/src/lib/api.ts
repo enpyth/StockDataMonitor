@@ -40,6 +40,10 @@ export function loadOhlcv(symbol: string, token: string): Promise<OhlcvDaily[]> 
   return apiFetch<OhlcvDaily[]>(`/api/stocks/${encodeURIComponent(symbol)}/ohlcv?limit=90`, token)
 }
 
+export function loadQuotePrices(symbol: string, token: string): Promise<QuoteSnapshot[]> {
+  return apiFetch<QuoteSnapshot[]>(`/api/stocks/${encodeURIComponent(symbol)}/prices?limit=90`, token)
+}
+
 export function runIngestion(token: string): Promise<IngestionRunResult> {
   return apiFetch<IngestionRunResult>('/api/ingestions/run', token, { method: 'POST' })
 }

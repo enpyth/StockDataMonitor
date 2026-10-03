@@ -90,6 +90,16 @@ def create_app() -> FastAPI:
     def latest_quotes(repository: StockRepository = Depends(get_repository)) -> list[QuoteSnapshot]:
         return repository.list_latest_quotes()
 
+    @app.get("/api/stocks/{symbol}/prices", response_model=list[QuoteSnapshot], dependencies=[Depends(require_user)])
+    def get_quote_prices(
+        symbol: str,
+        start: str | None = None,
+        end: str | None = None,
+        limit: int = Query(default=260, ge=1, le=1000),
+        repository: StockRepository = Depends(get_repository),
+    ) -> list[QuoteSnapshot]:
+        return repository.list_quote_prices(symbol, start, end, limit)
+
     @app.get("/api/ingestions", response_model=list[IngestionRun], dependencies=[Depends(require_user)])
     def ingestion_runs(
         limit: int = Query(default=20, ge=1, le=100),
