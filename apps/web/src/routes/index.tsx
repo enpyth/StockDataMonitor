@@ -5,14 +5,14 @@ import {
   LogOut,
   Play,
   RefreshCcw,
-  Search,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { isAllowedUserEmail } from '../lib/access'
 import { loadDashboard, loadOhlcv, loadQuotePrices, runIngestion, type DashboardData } from '../lib/api'
+import { PriceLineChart } from '../components/PriceLineChart'
 import type { OhlcvDaily, QuoteSnapshot, Security } from '../generated/client/types.gen'
 
 export const Route = createFileRoute('/')({ component: Home })
@@ -20,12 +20,16 @@ export const Route = createFileRoute('/')({ component: Home })
 function Home() {
   const [session, setSession] = useState<Session | null>(null)
   const [email, setEmail] = useState('')
-  const [selectedSymbol, setSelectedSymbol] = useState('AAPL')
+  const [selectedSymbol, setSelectedSymbol] = useState('')
+  const [selectedExchange, setSelectedExchange] = useState('')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [ohlcv, setOhlcv] = useState<OhlcvDaily[]>([])
   const [quotePrices, setQuotePrices] = useState<QuoteSnapshot[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailVersion, setDetailVersion] = useState(0)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const activeTokenRef = useRef<string | null>(null)
 
   const token = session?.access_token
 
@@ -45,40 +49,66 @@ function Home() {
   function handleSession(nextSession: Session | null) {
     const userEmail = nextSession?.user.email
     if (nextSession && !isAllowedUserEmail(userEmail)) {
+      activeTokenRef.current = null
       setSession(null)
       setMessage('This email is not allowed to access Quant v1.')
       supabase?.auth.signOut()
       return
     }
+    activeTokenRef.current = nextSession?.access_token ?? null
     setSession(nextSession)
+    setDashboard(null)
+    setSelectedSymbol('')
+    setSelectedExchange('')
+    setOhlcv([])
+    setQuotePrices([])
+    setDetailLoading(false)
   }
 
   useEffect(() => {
     if (!token) return
+    let active = true
 
     setLoading(true)
     setMessage(null)
     loadDashboard(token)
       .then((data) => {
+        if (!active) return
         setDashboard(data)
-        if (data.stocks.length > 0 && !data.stocks.some((stock) => stock.yahoo_symbol === selectedSymbol)) {
-          setSelectedSymbol(data.stocks[0].yahoo_symbol)
-        }
+        setSelectedExchange((current) => data.exchanges.includes(current) ? current : (data.exchanges[0] ?? ''))
+        setSelectedSymbol((current) =>
+          data.stocks.some((stock) => stock.yahoo_symbol === current)
+            ? current
+            : (data.stocks[0]?.yahoo_symbol ?? ''),
+        )
       })
-      .catch((error: Error) => setMessage(error.message))
-      .finally(() => setLoading(false))
-  }, [token, selectedSymbol])
+      .catch((error: Error) => { if (active) setMessage(error.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [token])
 
   useEffect(() => {
-    if (!token || !selectedSymbol) return
+    if (!token || !selectedSymbol) {
+      setOhlcv([])
+      setQuotePrices([])
+      setDetailLoading(false)
+      return
+    }
+    let active = true
+    setOhlcv([])
+    setQuotePrices([])
+    setDetailLoading(true)
 
     Promise.all([loadOhlcv(selectedSymbol, token), loadQuotePrices(selectedSymbol, token)])
       .then(([nextOhlcv, nextQuotePrices]) => {
+        if (!active) return
         setOhlcv(nextOhlcv)
         setQuotePrices(nextQuotePrices)
       })
-      .catch((error: Error) => setMessage(error.message))
-  }, [token, selectedSymbol])
+      .catch((error: Error) => { if (active) setMessage(error.message) })
+      .finally(() => { if (active) setDetailLoading(false) })
+    return () => { active = false }
+  }, [token, selectedSymbol, detailVersion])
 
   const quoteBySymbol = useMemo(() => {
     return new Map((dashboard?.quotes ?? []).map((quote) => [quote.symbol, quote]))
@@ -111,31 +141,37 @@ function Home() {
     setMessage(null)
     try {
       const data = await loadDashboard(token)
+      if (activeTokenRef.current !== token) return
       setDashboard(data)
-      const [nextOhlcv, nextQuotePrices] = await Promise.all([
-        loadOhlcv(selectedSymbol, token),
-        loadQuotePrices(selectedSymbol, token),
-      ])
-      setOhlcv(nextOhlcv)
-      setQuotePrices(nextQuotePrices)
+      setSelectedExchange((current) => data.exchanges.includes(current) ? current : (data.exchanges[0] ?? ''))
+      const nextSymbol = data.stocks.some((stock) => stock.yahoo_symbol === selectedSymbol)
+        ? selectedSymbol
+        : (data.stocks[0]?.yahoo_symbol ?? '')
+      setSelectedSymbol(nextSymbol)
+      setDetailVersion((version) => version + 1)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to refresh data')
+      if (activeTokenRef.current === token) {
+        setMessage(error instanceof Error ? error.message : 'Unable to refresh data')
+      }
     } finally {
-      setLoading(false)
+      if (activeTokenRef.current === token) setLoading(false)
     }
   }
 
   async function triggerIngestion() {
-    if (!token) return
+    if (!token || !selectedExchange) return
     setLoading(true)
-    setMessage('Ingestion started. This can take a minute.')
+    setMessage(`${selectedExchange} ingestion started. This can take a minute.`)
     try {
-      const result = await runIngestion(token)
-      setMessage(`Ingestion ${result.status}: ${result.symbols_succeeded}/${result.symbols_total} symbols succeeded.`)
+      const result = await runIngestion(token, selectedExchange)
+      if (activeTokenRef.current !== token) return
       await refreshData()
+      setMessage(`${selectedExchange} ingestion ${result.status}: ${result.symbols_succeeded}/${result.symbols_total} symbols succeeded.`)
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Ingestion failed')
-      setLoading(false)
+      if (activeTokenRef.current === token) {
+        setMessage(error instanceof Error ? error.message : 'Ingestion failed')
+        setLoading(false)
+      }
     }
   }
 
@@ -194,7 +230,10 @@ function Home() {
               <RefreshCcw size={17} />
               Refresh
             </button>
-            <button className="primary-button" type="button" onClick={triggerIngestion} disabled={loading}>
+            <select aria-label="Exchange to ingest" value={selectedExchange} onChange={(event) => setSelectedExchange(event.target.value)} disabled={loading || !dashboard?.exchanges.length}>
+              {dashboard?.exchanges.length ? dashboard.exchanges.map((exchange) => <option key={exchange} value={exchange}>{exchange}</option>) : <option value="">No exchange configured</option>}
+            </select>
+            <button className="primary-button" type="button" onClick={triggerIngestion} disabled={loading || !selectedExchange}>
               <Play size={17} />
               Run ingestion
             </button>
@@ -213,28 +252,28 @@ function Home() {
           <Metric label="Recent runs" value={dashboard?.runs.length ?? 0} />
         </section>
 
-        <section className="content-grid">
+        <div className="content-grid">
           <div className="table-region">
             <div className="section-heading">
               <div>
-                <h2>Stock universe</h2>
-                <p>Configured Yahoo Finance symbols grouped by listing exchange.</p>
+                <h2>Latest market data</h2>
+                <p>Latest trading session OHLCV and latest quote snapshot for each configured stock.</p>
               </div>
-              <Search size={18} />
             </div>
             <StockTable
               stocks={dashboard?.stocks ?? []}
               quoteBySymbol={quoteBySymbol}
+              latestOhlcv={dashboard?.latestOhlcv ?? {}}
               selectedSymbol={selectedSymbol}
               onSelect={setSelectedSymbol}
             />
           </div>
 
-          <aside className="detail-region">
-            <SecurityDetail security={selectedSecurity} quote={latestQuote} ohlcvRows={ohlcv} priceRows={quotePrices} />
+          <div className="detail-region">
+            <SecurityDetail security={selectedSecurity} quote={latestQuote} ohlcvRows={ohlcv} priceRows={quotePrices} loading={detailLoading} />
             <RunList runs={dashboard?.runs ?? []} />
-          </aside>
-        </section>
+          </div>
+        </div>
       </section>
     </main>
   )
@@ -267,38 +306,46 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 function StockTable({
   stocks,
   quoteBySymbol,
+  latestOhlcv,
   selectedSymbol,
   onSelect,
 }: {
   stocks: Security[]
   quoteBySymbol: Map<string, QuoteSnapshot>
+  latestOhlcv: Record<string, OhlcvDaily | undefined>
   selectedSymbol: string
   onSelect: (symbol: string) => void
 }) {
   return (
-    <div className="stock-table">
-      <div className="stock-row header">
-        <span>Symbol</span>
-        <span>Exchange</span>
-        <span>Name</span>
-        <span>Price</span>
+    <div className="stock-table-scroll">
+      <div className="stock-table">
+        <div className="stock-row header">
+          <span>Stock</span><span>Session</span><span>Open</span><span>High</span>
+          <span>Low</span><span>Close</span><span>Volume</span><span>Snapshot price</span>
+        </div>
+        {stocks.map((stock) => {
+          const quote = quoteBySymbol.get(stock.yahoo_symbol)
+          const daily = latestOhlcv[stock.yahoo_symbol]
+          return (
+            <button
+              className={`stock-row ${selectedSymbol === stock.yahoo_symbol ? 'selected' : ''}`}
+              key={stock.yahoo_symbol}
+              type="button"
+              onClick={() => onSelect(stock.yahoo_symbol)}
+            >
+              <span className="stock-identity"><strong>{stock.yahoo_symbol}</strong><small>{stock.name} · {stock.exchange_code}</small></span>
+              <span className="stock-date">{daily?.date ?? '—'}</span>
+              <span>{formatAmount(daily?.open)}</span>
+              <span>{formatAmount(daily?.high)}</span>
+              <span>{formatAmount(daily?.low)}</span>
+              <strong>{formatAmount(daily?.close)}</strong>
+              <span>{daily?.volume?.toLocaleString() ?? '—'}</span>
+              <span className="snapshot-cell"><strong>{formatMoney(quote?.price, quote?.currency ?? stock.currency)}</strong><small>{quote?.date ?? 'No snapshot'}</small></span>
+            </button>
+          )
+        })}
+        {stocks.length === 0 && <p className="table-empty">No stocks configured for this user.</p>}
       </div>
-      {stocks.map((stock) => {
-        const quote = quoteBySymbol.get(stock.yahoo_symbol)
-        return (
-          <button
-            className={`stock-row ${selectedSymbol === stock.yahoo_symbol ? 'selected' : ''}`}
-            key={stock.yahoo_symbol}
-            type="button"
-            onClick={() => onSelect(stock.yahoo_symbol)}
-          >
-            <strong>{stock.yahoo_symbol}</strong>
-            <span>{stock.exchange_code}</span>
-            <span>{stock.name}</span>
-            <span>{formatMoney(quote?.price, quote?.currency ?? stock.currency)}</span>
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -308,14 +355,15 @@ function SecurityDetail({
   quote,
   ohlcvRows,
   priceRows,
+  loading,
 }: {
   security: Security | undefined
   quote: QuoteSnapshot | undefined
   ohlcvRows: OhlcvDaily[]
   priceRows: QuoteSnapshot[]
+  loading: boolean
 }) {
-  const orderedPrices = [...priceRows].reverse()
-  const maxPrice = Math.max(...orderedPrices.map((row) => Number(row.price ?? 0)), 1)
+  const latestDaily = ohlcvRows[0]
 
   return (
     <section className="detail-panel">
@@ -326,46 +374,18 @@ function SecurityDetail({
         </div>
         <span className="exchange-pill">{security?.exchange_code ?? '--'}</span>
       </div>
-      <div className="quote-grid">
-        <Metric label="Last price" value={formatAmount(quote?.price)} />
-        <Metric label="Price rows" value={priceRows.length} />
+      <div className="detail-prices">
+        <div><span>Snapshot price · {quote?.date ?? '—'}</span><strong>{formatMoney(quote?.price, quote?.currency ?? security?.currency ?? 'USD')}</strong></div>
+        <div><span>Session close · {latestDaily?.date ?? '—'}</span><strong>{formatMoney(latestDaily?.close, security?.currency ?? 'USD')}</strong></div>
       </div>
-      <div className="mini-chart" aria-label="Price history">
-        {orderedPrices.slice(-42).map((row) => (
-          <span
-            key={row.date}
-            title={`${row.date}: ${formatAmount(row.price)}`}
-            style={{ height: `${Math.max((Number(row.price ?? 0) / maxPrice) * 100, 4)}%` }}
-          />
-        ))}
-      </div>
-      <div className="price-list">
-        <h3>Price</h3>
-        {priceRows.slice(0, 6).map((row) => (
-          <div key={row.date}>
-            <span>{row.date}</span>
-            <strong>{formatMoney(row.price, row.currency)}</strong>
-          </div>
-        ))}
-      </div>
-      <div className="ohlcv-list">
-        <h3>OHLCV</h3>
-        {ohlcvRows.slice(0, 6).map((row) => (
-          <div key={row.date}>
-            <span>{row.date}</span>
-            <strong>Close {formatAmount(row.close)}</strong>
-            <small>
-              O {formatAmount(row.open)} / H {formatAmount(row.high)} / L {formatAmount(row.low)} / V{' '}
-              {row.volume?.toLocaleString() ?? '--'}
-            </small>
-          </div>
-        ))}
-      </div>
+      {loading ? <p className="chart-empty">Loading price history…</p> : (
+        <PriceLineChart ohlcvRows={ohlcvRows} priceRows={priceRows} currency={security?.currency ?? 'USD'} />
+      )}
     </section>
   )
 }
 
-function RunList({ runs }: { runs: Array<{ id: string; status: string; started_at: string; symbols_succeeded: number; symbols_total: number }> }) {
+function RunList({ runs }: { runs: Array<{ id: string; exchange_code?: string | null; status: string; started_at: string; symbols_succeeded: number; symbols_total: number }> }) {
   return (
     <section className="run-list">
       <h2>Recent ingestion</h2>
@@ -373,7 +393,7 @@ function RunList({ runs }: { runs: Array<{ id: string; status: string; started_a
       {runs.map((run) => (
         <div key={run.id}>
           <span>{new Date(run.started_at).toLocaleString()}</span>
-          <strong>{run.status}</strong>
+          <strong>{run.exchange_code ?? 'All'} · {run.status}</strong>
           <small>
             {run.symbols_succeeded}/{run.symbols_total} symbols
           </small>

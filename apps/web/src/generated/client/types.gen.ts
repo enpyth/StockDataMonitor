@@ -37,6 +37,10 @@ export type IngestionRun = {
      */
     id: string;
     /**
+     * Exchange Code
+     */
+    exchange_code?: string | null;
+    /**
      * Status
      */
     status: string;
@@ -76,6 +80,10 @@ export type IngestionRunResult = {
      * Run Id
      */
     run_id: string;
+    /**
+     * Exchange Code
+     */
+    exchange_code?: string | null;
     /**
      * Status
      */
@@ -404,6 +412,51 @@ export type LatestQuotesApiQuotesLatestGetResponses = {
 
 export type LatestQuotesApiQuotesLatestGetResponse = LatestQuotesApiQuotesLatestGetResponses[keyof LatestQuotesApiQuotesLatestGetResponses];
 
+export type GetQuotePricesApiStocksSymbolPricesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Symbol
+         */
+        symbol: string;
+    };
+    query?: {
+        /**
+         * Start
+         */
+        start?: string | null;
+        /**
+         * End
+         */
+        end?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/stocks/{symbol}/prices';
+};
+
+export type GetQuotePricesApiStocksSymbolPricesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetQuotePricesApiStocksSymbolPricesGetError = GetQuotePricesApiStocksSymbolPricesGetErrors[keyof GetQuotePricesApiStocksSymbolPricesGetErrors];
+
+export type GetQuotePricesApiStocksSymbolPricesGetResponses = {
+    /**
+     * Response Get Quote Prices Api Stocks  Symbol  Prices Get
+     *
+     * Successful Response
+     */
+    200: Array<QuoteSnapshot>;
+};
+
+export type GetQuotePricesApiStocksSymbolPricesGetResponse = GetQuotePricesApiStocksSymbolPricesGetResponses[keyof GetQuotePricesApiStocksSymbolPricesGetResponses];
+
 export type IngestionRunsApiIngestionsGetData = {
     body?: never;
     path?: never;
@@ -436,12 +489,46 @@ export type IngestionRunsApiIngestionsGetResponses = {
 
 export type IngestionRunsApiIngestionsGetResponse = IngestionRunsApiIngestionsGetResponses[keyof IngestionRunsApiIngestionsGetResponses];
 
-export type RunIngestionApiIngestionsRunPostData = {
+export type IngestionExchangesApiIngestionsExchangesGetData = {
     body?: never;
     path?: never;
     query?: never;
+    url: '/api/ingestions/exchanges';
+};
+
+export type IngestionExchangesApiIngestionsExchangesGetResponses = {
+    /**
+     * Response Ingestion Exchanges Api Ingestions Exchanges Get
+     *
+     * Successful Response
+     */
+    200: Array<string>;
+};
+
+export type IngestionExchangesApiIngestionsExchangesGetResponse = IngestionExchangesApiIngestionsExchangesGetResponses[keyof IngestionExchangesApiIngestionsExchangesGetResponses];
+
+export type RunIngestionApiIngestionsRunPostData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Exchange
+         *
+         * Configured exchange code
+         */
+        exchange?: string | null;
+    };
     url: '/api/ingestions/run';
 };
+
+export type RunIngestionApiIngestionsRunPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RunIngestionApiIngestionsRunPostError = RunIngestionApiIngestionsRunPostErrors[keyof RunIngestionApiIngestionsRunPostErrors];
 
 export type RunIngestionApiIngestionsRunPostResponses = {
     /**

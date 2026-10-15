@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetOhlcvApiStocksSymbolOhlcvGetData, GetOhlcvApiStocksSymbolOhlcvGetErrors, GetOhlcvApiStocksSymbolOhlcvGetResponses, GetStockApiStocksSymbolGetData, GetStockApiStocksSymbolGetErrors, GetStockApiStocksSymbolGetResponses, GetTodayOhlcvApiStocksSymbolOhlcvTodayGetData, GetTodayOhlcvApiStocksSymbolOhlcvTodayGetErrors, GetTodayOhlcvApiStocksSymbolOhlcvTodayGetResponses, HealthHealthGetData, HealthHealthGetResponses, IngestionRunsApiIngestionsGetData, IngestionRunsApiIngestionsGetErrors, IngestionRunsApiIngestionsGetResponses, LatestQuotesApiQuotesLatestGetData, LatestQuotesApiQuotesLatestGetResponses, ListStocksApiStocksGetData, ListStocksApiStocksGetResponses, RunIngestionApiIngestionsRunPostData, RunIngestionApiIngestionsRunPostResponses } from './types.gen';
+import type { GetOhlcvApiStocksSymbolOhlcvGetData, GetOhlcvApiStocksSymbolOhlcvGetErrors, GetOhlcvApiStocksSymbolOhlcvGetResponses, GetQuotePricesApiStocksSymbolPricesGetData, GetQuotePricesApiStocksSymbolPricesGetErrors, GetQuotePricesApiStocksSymbolPricesGetResponses, GetStockApiStocksSymbolGetData, GetStockApiStocksSymbolGetErrors, GetStockApiStocksSymbolGetResponses, GetTodayOhlcvApiStocksSymbolOhlcvTodayGetData, GetTodayOhlcvApiStocksSymbolOhlcvTodayGetErrors, GetTodayOhlcvApiStocksSymbolOhlcvTodayGetResponses, HealthHealthGetData, HealthHealthGetResponses, IngestionExchangesApiIngestionsExchangesGetData, IngestionExchangesApiIngestionsExchangesGetResponses, IngestionRunsApiIngestionsGetData, IngestionRunsApiIngestionsGetErrors, IngestionRunsApiIngestionsGetResponses, LatestQuotesApiQuotesLatestGetData, LatestQuotesApiQuotesLatestGetResponses, ListStocksApiStocksGetData, ListStocksApiStocksGetResponses, RunIngestionApiIngestionsRunPostData, RunIngestionApiIngestionsRunPostErrors, RunIngestionApiIngestionsRunPostResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -69,6 +69,15 @@ export const latestQuotesApiQuotesLatestGet = <ThrowOnError extends boolean = fa
 });
 
 /**
+ * Get Quote Prices
+ */
+export const getQuotePricesApiStocksSymbolPricesGet = <ThrowOnError extends boolean = false>(options: Options<GetQuotePricesApiStocksSymbolPricesGetData, ThrowOnError>): RequestResult<GetQuotePricesApiStocksSymbolPricesGetResponses, GetQuotePricesApiStocksSymbolPricesGetErrors, ThrowOnError> => (options.client ?? client).get<GetQuotePricesApiStocksSymbolPricesGetResponses, GetQuotePricesApiStocksSymbolPricesGetErrors, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/stocks/{symbol}/prices',
+    ...options
+});
+
+/**
  * Ingestion Runs
  */
 export const ingestionRunsApiIngestionsGet = <ThrowOnError extends boolean = false>(options?: Options<IngestionRunsApiIngestionsGetData, ThrowOnError>): RequestResult<IngestionRunsApiIngestionsGetResponses, IngestionRunsApiIngestionsGetErrors, ThrowOnError> => (options?.client ?? client).get<IngestionRunsApiIngestionsGetResponses, IngestionRunsApiIngestionsGetErrors, ThrowOnError>({
@@ -78,9 +87,18 @@ export const ingestionRunsApiIngestionsGet = <ThrowOnError extends boolean = fal
 });
 
 /**
+ * Ingestion Exchanges
+ */
+export const ingestionExchangesApiIngestionsExchangesGet = <ThrowOnError extends boolean = false>(options?: Options<IngestionExchangesApiIngestionsExchangesGetData, ThrowOnError>): RequestResult<IngestionExchangesApiIngestionsExchangesGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<IngestionExchangesApiIngestionsExchangesGetResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/ingestions/exchanges',
+    ...options
+});
+
+/**
  * Run Ingestion
  */
-export const runIngestionApiIngestionsRunPost = <ThrowOnError extends boolean = false>(options?: Options<RunIngestionApiIngestionsRunPostData, ThrowOnError>): RequestResult<RunIngestionApiIngestionsRunPostResponses, unknown, ThrowOnError> => (options?.client ?? client).post<RunIngestionApiIngestionsRunPostResponses, unknown, ThrowOnError>({
+export const runIngestionApiIngestionsRunPost = <ThrowOnError extends boolean = false>(options?: Options<RunIngestionApiIngestionsRunPostData, ThrowOnError>): RequestResult<RunIngestionApiIngestionsRunPostResponses, RunIngestionApiIngestionsRunPostErrors, ThrowOnError> => (options?.client ?? client).post<RunIngestionApiIngestionsRunPostResponses, RunIngestionApiIngestionsRunPostErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
     url: '/api/ingestions/run',
     ...options

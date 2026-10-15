@@ -6,7 +6,7 @@
 - **API**: FastAPI service in `apps/api`, deployed to Azure App Service.
 - **Database/Auth**: Hosted Supabase.
 - **Ingestion**: Python `yfinance` ingestion command in `apps/api/app/ingestion.py`.
-- **Config**: API stock universe in `apps/api/config/stocks.json`.
+- **Config**: One stock universe per Supabase Auth user in `apps/api/config/users/<user-id>.json`.
 
 ## 2. Required Environment Variables
 
@@ -84,7 +84,7 @@ Run ingestion manually from the API app directory:
 ```sh
 cd apps/api
 . .venv/bin/activate
-python -m app.ingestion
+python -m app.ingestion --exchange ASX
 ```
 
 Expected success:
@@ -92,18 +92,19 @@ Expected success:
 ```json
 {
   "status": "completed",
-  "symbols_total": 12,
-  "symbols_succeeded": 12,
+  "exchange_code": "ASX",
+  "symbols_total": 3,
+  "symbols_succeeded": 3,
   "symbols_failed": 0,
   "errors": []
 }
 ```
 
-If `status` is `completed_with_errors`, inspect the `errors` array. Common causes:
+The symbol count depends on the union of configured user files for the chosen exchange. An exchange without configured symbols is rejected. If `status` is `completed_with_errors`, inspect the `errors` array. Common causes:
 - Missing or invalid Supabase environment variables.
 - Supabase migrations not applied.
 - Yahoo Finance/yfinance temporary fetch failure.
-- Unknown or delisted symbol in `stocks.json`.
+- Unknown or delisted symbol in a user config file.
 - Network connectivity issue from the API host.
 
 ## 5. Changing the Stock Universe
@@ -111,10 +112,14 @@ If `status` is `completed_with_errors`, inspect the `errors` array. Common cause
 Edit:
 
 ```text
-apps/api/config/stocks.json
+apps/api/config/users/<supabase-auth-user-uuid>.json
 ```
 
 Rules:
+- Copy `apps/api/config/stocks.example.json` as a starting point, then remove unwanted exchanges and symbols.
+- Obtain the user's UUID from Supabase Auth > Users. File names must be lowercase UUIDs.
+- A missing file gives that user an empty stock universe. Removing a file revokes access on the next API request.
+- Deploy the `config/users` directory with the API. JSON files are server-side configuration and must not be served publicly.
 - Use Yahoo Finance/yfinance symbols.
 - Keep exchange code, timezone, and currency consistent.
 - Run tests after changes:
@@ -132,11 +137,11 @@ Then run ingestion and verify `symbols_failed = 0`.
 
 ## 6. Database Maintenance
 
-Apply migrations in order:
+Apply the schema, then the seed data:
 
 ```text
-supabase/migrations/0001_stock_data.sql
-supabase/migrations/0002_seed_exchanges.sql
+supabase/migrations/scheme.sql
+supabase/migrations/seed.sql
 ```
 
 To completely clean a local/dev/test Supabase environment before re-applying migrations, run:
@@ -188,5 +193,5 @@ bun run build
 - **401 from API**: verify Supabase JWT settings, browser session, and `Authorization: Bearer <token>`.
 - **CORS error**: add the Vercel production URL to `CORS_ORIGINS` on Azure.
 - **Ingestion fails for all symbols**: check Supabase service role key, migrations, and network access.
-- **Ingestion fails for one symbol**: check symbol validity in Yahoo Finance and update `stocks.json` if needed.
+- **Ingestion fails for one symbol**: check symbol validity in Yahoo Finance and update that user's config file if needed.
 - **Web cannot load data**: verify `VITE_API_BASE_URL` points to the Azure API URL and redeploy Vercel after changes.

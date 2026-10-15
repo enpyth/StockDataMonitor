@@ -1,6 +1,11 @@
+-- Apply before seed.sql. Safe to run on a fresh database or after the old
+-- numbered SQL files: existing tables are kept and the user access changes
+-- are applied in place.
+begin;
+
 create extension if not exists pgcrypto;
 
-create table public.exchanges (
+create table if not exists public.exchanges (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
@@ -10,7 +15,7 @@ create table public.exchanges (
   updated_at timestamptz not null default now()
 );
 
-create table public.securities (
+create table if not exists public.securities (
   id uuid primary key default gen_random_uuid(),
   exchange_id uuid not null references public.exchanges(id) on delete restrict,
   symbol text not null,
@@ -26,7 +31,7 @@ create table public.securities (
   unique (yahoo_symbol)
 );
 
-create table public.ohlcv_daily (
+create table if not exists public.ohlcv_daily (
   id uuid primary key default gen_random_uuid(),
   security_id uuid not null references public.securities(id) on delete cascade,
   date date not null,
@@ -41,7 +46,7 @@ create table public.ohlcv_daily (
   unique (security_id, date)
 );
 
-create table public.quote_snapshots (
+create table if not exists public.quote_snapshots (
   id uuid primary key default gen_random_uuid(),
   security_id uuid not null references public.securities(id) on delete cascade,
   date date not null,
@@ -52,7 +57,7 @@ create table public.quote_snapshots (
   unique (security_id, date)
 );
 
-create table public.ingestion_runs (
+create table if not exists public.ingestion_runs (
   id uuid primary key default gen_random_uuid(),
   status text not null check (status in ('running', 'completed', 'failed', 'completed_with_errors')),
   started_at timestamptz not null default now(),
@@ -60,12 +65,21 @@ create table public.ingestion_runs (
   symbols_total integer not null default 0,
   symbols_succeeded integer not null default 0,
   symbols_failed integer not null default 0,
-  errors jsonb not null default '[]'::jsonb
+  errors jsonb not null default '[]'::jsonb,
+  user_id uuid references auth.users(id) on delete set null,
+  exchange_code text
 );
 
-create index ohlcv_daily_security_date_idx on public.ohlcv_daily (security_id, date desc);
-create index quote_snapshots_security_date_idx on public.quote_snapshots (security_id, date desc);
-create index ingestion_runs_started_idx on public.ingestion_runs (started_at desc);
+alter table public.ingestion_runs
+  add column if not exists user_id uuid references auth.users(id) on delete set null;
+alter table public.ingestion_runs
+  add column if not exists exchange_code text;
+
+create index if not exists ohlcv_daily_security_date_idx on public.ohlcv_daily (security_id, date desc);
+create index if not exists quote_snapshots_security_date_idx on public.quote_snapshots (security_id, date desc);
+create index if not exists ingestion_runs_started_idx on public.ingestion_runs (started_at desc);
+create index if not exists ingestion_runs_user_started_idx on public.ingestion_runs (user_id, started_at desc);
+create index if not exists ingestion_runs_user_exchange_started_idx on public.ingestion_runs (user_id, exchange_code, started_at desc);
 
 alter table public.exchanges enable row level security;
 alter table public.securities enable row level security;
@@ -73,27 +87,12 @@ alter table public.ohlcv_daily enable row level security;
 alter table public.quote_snapshots enable row level security;
 alter table public.ingestion_runs enable row level security;
 
-create policy "Authenticated users can read exchanges"
-  on public.exchanges for select
-  to authenticated
-  using (true);
+-- Only the API's service role may read stock data. The API filters each
+-- response using the signed-in user's server-side stock configuration.
+drop policy if exists "Authenticated users can read exchanges" on public.exchanges;
+drop policy if exists "Authenticated users can read securities" on public.securities;
+drop policy if exists "Authenticated users can read ohlcv" on public.ohlcv_daily;
+drop policy if exists "Authenticated users can read quote snapshots" on public.quote_snapshots;
+drop policy if exists "Authenticated users can read ingestion runs" on public.ingestion_runs;
 
-create policy "Authenticated users can read securities"
-  on public.securities for select
-  to authenticated
-  using (true);
-
-create policy "Authenticated users can read ohlcv"
-  on public.ohlcv_daily for select
-  to authenticated
-  using (true);
-
-create policy "Authenticated users can read quote snapshots"
-  on public.quote_snapshots for select
-  to authenticated
-  using (true);
-
-create policy "Authenticated users can read ingestion runs"
-  on public.ingestion_runs for select
-  to authenticated
-  using (true);
+commit;

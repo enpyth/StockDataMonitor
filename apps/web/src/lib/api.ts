@@ -24,28 +24,40 @@ export type DashboardData = {
   stocks: Security[]
   quotes: QuoteSnapshot[]
   runs: IngestionRun[]
+  exchanges: string[]
+  latestOhlcv: Record<string, OhlcvDaily | undefined>
 }
 
 export async function loadDashboard(token: string): Promise<DashboardData> {
-  const [stocks, quotes, runs] = await Promise.all([
+  const [stocks, quotes, runs, exchanges] = await Promise.all([
     apiFetch<Security[]>('/api/stocks', token),
     apiFetch<QuoteSnapshot[]>('/api/quotes/latest', token),
     apiFetch<IngestionRun[]>('/api/ingestions?limit=5', token),
+    apiFetch<string[]>('/api/ingestions/exchanges', token),
   ])
+  const latestRows = await Promise.allSettled(
+    stocks.map((stock) => loadOhlcv(stock.yahoo_symbol, token, 1)),
+  )
+  const latestOhlcv = Object.fromEntries(
+    stocks.map((stock, index) => [
+      stock.yahoo_symbol,
+      latestRows[index].status === 'fulfilled' ? latestRows[index].value[0] : undefined,
+    ]),
+  )
 
-  return { stocks, quotes, runs }
+  return { stocks, quotes, runs, exchanges, latestOhlcv }
 }
 
-export function loadOhlcv(symbol: string, token: string): Promise<OhlcvDaily[]> {
-  return apiFetch<OhlcvDaily[]>(`/api/stocks/${encodeURIComponent(symbol)}/ohlcv?limit=90`, token)
+export function loadOhlcv(symbol: string, token: string, limit = 90): Promise<OhlcvDaily[]> {
+  return apiFetch<OhlcvDaily[]>(`/api/stocks/${encodeURIComponent(symbol)}/ohlcv?limit=${limit}`, token)
 }
 
 export function loadQuotePrices(symbol: string, token: string): Promise<QuoteSnapshot[]> {
   return apiFetch<QuoteSnapshot[]>(`/api/stocks/${encodeURIComponent(symbol)}/prices?limit=90`, token)
 }
 
-export function runIngestion(token: string): Promise<IngestionRunResult> {
-  return apiFetch<IngestionRunResult>('/api/ingestions/run', token, { method: 'POST' })
+export function runIngestion(token: string, exchange: string): Promise<IngestionRunResult> {
+  return apiFetch<IngestionRunResult>(`/api/ingestions/run?exchange=${encodeURIComponent(exchange)}`, token, { method: 'POST' })
 }
 
 async function readErrorDetail(response: Response) {

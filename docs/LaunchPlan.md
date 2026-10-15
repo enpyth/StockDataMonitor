@@ -18,9 +18,10 @@ Official references:
 ## 2. Pre-Launch Checklist
 
 - Supabase project is created.
-- SQL migrations are applied in order:
-  - `supabase/migrations/0001_stock_data.sql`
-  - `supabase/migrations/0002_seed_exchanges.sql`
+- SQL files are applied in order:
+  - `supabase/migrations/scheme.sql`
+  - `supabase/migrations/seed.sql`
+- User config files are created under `apps/api/config/users/` before deployment.
 - Supabase Google OAuth and email magic links are configured.
 - API checks pass from the API app directory:
 
@@ -29,7 +30,7 @@ cd apps/api
 . .venv/bin/activate
 ruff check .
 pytest
-python -m app.ingestion
+python -m app.ingestion --exchange ASX
 ```
 
 - Web checks pass from the web app directory:
@@ -140,7 +141,7 @@ Expected:
 Run ingestion after deployment. Use Azure SSH console or a one-off command in the App Service container:
 
 ```sh
-python -m app.ingestion
+python -m app.ingestion --exchange ASX
 ```
 
 ## 4. Deploy Web to Vercel
@@ -216,4 +217,4 @@ Web:
 - **Vercel**: use the Vercel dashboard to promote a previous deployment.
 - **Azure API**: redeploy the previous ZIP package or use App Service deployment slots if configured.
 - **Database**: avoid destructive migrations. Back up Supabase before schema changes.
-- **Config rollback**: revert `apps/api/config/stocks.json`, regenerate API client only if API shape changed, redeploy, then rerun ingestion.
+- **Config rollback**: revert the affected `apps/api/config/users/<user-id>.json`, redeploy, then rerun ingestion.

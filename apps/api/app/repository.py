@@ -19,8 +19,10 @@ class StockRepository(Protocol):
         self, symbol: str, start: str | None, end: str | None, limit: int
     ) -> list[QuoteSnapshot]: ...
     def list_latest_quotes(self) -> list[QuoteSnapshot]: ...
-    def list_ingestion_runs(self, limit: int) -> list[IngestionRun]: ...
-    def create_ingestion_run(self, symbols_total: int) -> str: ...
+    def list_ingestion_runs(self, limit: int, user_id: str) -> list[IngestionRun]: ...
+    def create_ingestion_run(
+        self, symbols_total: int, user_id: str | None = None, exchange_code: str | None = None
+    ) -> str: ...
     def finish_ingestion_run(
         self, run_id: str, status: str, succeeded: int, failed: int, errors: list[dict[str, Any]]
     ) -> None: ...
@@ -124,20 +126,26 @@ class SupabaseStockRepository:
         response = query.execute()
         return [QuoteSnapshot(symbol=security.yahoo_symbol, **row) for row in response.data or []]
 
-    def list_ingestion_runs(self, limit: int) -> list[IngestionRun]:
+    def list_ingestion_runs(self, limit: int, user_id: str) -> list[IngestionRun]:
         response = (
             self.client.table("ingestion_runs")
             .select("*")
+            .eq("user_id", user_id)
             .order("started_at", desc=True)
             .limit(limit)
             .execute()
         )
         return [IngestionRun.model_validate(row) for row in response.data or []]
 
-    def create_ingestion_run(self, symbols_total: int) -> str:
+    def create_ingestion_run(
+        self, symbols_total: int, user_id: str | None = None, exchange_code: str | None = None
+    ) -> str:
         response = (
             self.client.table("ingestion_runs")
-            .insert({"status": "running", "symbols_total": symbols_total})
+            .insert({
+                "status": "running", "symbols_total": symbols_total,
+                "user_id": user_id, "exchange_code": exchange_code,
+            })
             .execute()
         )
         rows = response.data or []
@@ -276,14 +284,22 @@ class MemoryStockRepository:
         rows = sorted(rows, key=lambda row: row["date"], reverse=True)[:limit]
         return [QuoteSnapshot.model_validate({**row, "symbol": symbol}) for row in rows]
 
-    def list_ingestion_runs(self, limit: int) -> list[IngestionRun]:
-        rows = sorted(self.runs.values(), key=lambda row: row["started_at"], reverse=True)[:limit]
+    def list_ingestion_runs(self, limit: int, user_id: str) -> list[IngestionRun]:
+        rows = sorted(
+            (row for row in self.runs.values() if row["user_id"] == user_id),
+            key=lambda row: row["started_at"],
+            reverse=True,
+        )[:limit]
         return [IngestionRun.model_validate(row) for row in rows]
 
-    def create_ingestion_run(self, symbols_total: int) -> str:
+    def create_ingestion_run(
+        self, symbols_total: int, user_id: str | None = None, exchange_code: str | None = None
+    ) -> str:
         run_id = str(uuid4())
         self.runs[run_id] = {
             "id": run_id,
+            "user_id": user_id,
+            "exchange_code": exchange_code,
             "status": "running",
             "started_at": datetime.now(UTC),
             "finished_at": None,

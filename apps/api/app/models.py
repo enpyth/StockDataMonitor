@@ -56,6 +56,7 @@ class QuoteSnapshot(BaseModel):
 
 class IngestionRun(BaseModel):
     id: str
+    exchange_code: str | None = None
     status: str
     started_at: datetime
     finished_at: datetime | None = None
@@ -67,6 +68,7 @@ class IngestionRun(BaseModel):
 
 class IngestionRunResult(BaseModel):
     run_id: str
+    exchange_code: str | None = None
     status: str
     symbols_total: int
     symbols_succeeded: int

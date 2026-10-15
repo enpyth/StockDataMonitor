@@ -26,7 +26,7 @@ Quant v1 is a stock data collection and monitoring platform. It collects company
 
 ## 5. Functional Requirements
 
-- Stock universe is defined in `apps/api/config/stocks.json`.
+- Each user's stock universe is defined in `apps/api/config/users/<user-id>.json`.
 - Default configured symbols:
   - NASDAQ: `AAPL`, `MSFT`, `NVDA`
   - NYSE: `JPM`, `JNJ`, `KO`
@@ -96,7 +96,7 @@ bun run build
 ```sh
 cd apps/api
 . .venv/bin/activate
-python -m app.ingestion
+python -m app.ingestion --exchange ASX
 ```
 
 - Web users can sign in and view stocks, quotes, OHLCV, and ingestion runs.
