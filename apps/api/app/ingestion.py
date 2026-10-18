@@ -70,9 +70,14 @@ def run_ingestion(exchange_code: str) -> IngestionRunResult:
     return StockIngestionService(repository, YFinanceClient()).run_daily(exchange_code)
 
 
-if __name__ == "__main__":
+def main() -> int:
     parser = argparse.ArgumentParser(description="Ingest configured stocks for one exchange")
     parser.add_argument("--exchange", required=True, help="Exchange code, for example NASDAQ or ASX")
     args = parser.parse_args()
     result = run_ingestion(args.exchange)
     print(result.model_dump_json(indent=2))
+    return 1 if result.symbols_failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

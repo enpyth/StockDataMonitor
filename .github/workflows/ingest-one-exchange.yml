@@ -1,0 +1,67 @@
+name: Ingest one exchange
+
+on:
+  workflow_call:
+    inputs:
+      exchange:
+        required: true
+        type: string
+      timezone:
+        required: true
+        type: string
+      pre_auction_deadline:
+        required: true
+        type: string
+    secrets:
+      SUPABASE_URL:
+        required: true
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ingest-${{ inputs.exchange }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Check scheduled run is before closing auction
+        if: github.event_name == 'schedule'
+        env:
+          EXCHANGE: ${{ inputs.exchange }}
+          EXCHANGE_TIMEZONE: ${{ inputs.timezone }}
+          PRE_AUCTION_DEADLINE: ${{ inputs.pre_auction_deadline }}
+        run: |
+          python - <<'PY'
+          import os
+          from datetime import datetime, time
+          from zoneinfo import ZoneInfo
+
+          now = datetime.now(ZoneInfo(os.environ['EXCHANGE_TIMEZONE']))
+          deadline = time.fromisoformat(os.environ['PRE_AUCTION_DEADLINE'])
+          if now.weekday() >= 5 or now.time() >= deadline:
+              raise SystemExit(f"{os.environ['EXCHANGE']} scheduled run missed its pre-auction window: {now.isoformat()}")
+          print(f"{os.environ['EXCHANGE']} pre-auction window confirmed: {now.isoformat()}")
+          PY
+      - name: Ingest ${{ inputs.exchange }}
+        env:
+          EXCHANGE: ${{ inputs.exchange }}
+        run: python -m app.ingestion --exchange "$EXCHANGE"

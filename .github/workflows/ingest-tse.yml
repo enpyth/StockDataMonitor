@@ -1,0 +1,21 @@
+name: Ingest TSE
+
+on:
+  schedule:
+    - cron: '24 15 * * 1-5'
+      timezone: Asia/Tokyo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    uses: ./.github/workflows/ingest-one-exchange.yml
+    with:
+      exchange: TSE
+      timezone: Asia/Tokyo
+      pre_auction_deadline: '15:25'
+    secrets:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

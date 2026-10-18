@@ -1,0 +1,21 @@
+name: Ingest ASX
+
+on:
+  schedule:
+    - cron: '9 16 * * 1-5'
+      timezone: Australia/Sydney
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    uses: ./.github/workflows/ingest-one-exchange.yml
+    with:
+      exchange: ASX
+      timezone: Australia/Sydney
+      pre_auction_deadline: '16:10'
+    secrets:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -1,8 +1,10 @@
+import sys
+
 import pandas as pd
 import pytest
 
-from app.ingestion import StockIngestionService
-from app.models import ExchangeConfig, StockUniverse
+from app.ingestion import StockIngestionService, main
+from app.models import ExchangeConfig, IngestionRunResult, StockUniverse
 from app.repository import MemoryStockRepository
 
 
@@ -36,3 +38,14 @@ def test_ingestion_only_fetches_selected_exchange(monkeypatch):
     with pytest.raises(ValueError, match="Exchange is not configured"):
         service.run_daily("NYSE", "user-id")
     assert len(repository.runs) == 1
+
+
+def test_cli_reports_partial_ingestion_as_failure(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["ingestion.py", "--exchange", "ASX"])
+    monkeypatch.setattr("app.ingestion.run_ingestion", lambda _exchange: IngestionRunResult(
+        run_id="run-id", exchange_code="ASX", status="completed_with_errors",
+        symbols_total=2, symbols_succeeded=1, symbols_failed=1, errors=[{"symbol": "BHP.AX"}],
+    ))
+
+    assert main() == 1
+    assert '"symbols_failed": 1' in capsys.readouterr().out

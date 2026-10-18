@@ -1,0 +1,21 @@
+name: Ingest NYSE
+
+on:
+  schedule:
+    - cron: '59 15 * * 1-5'
+      timezone: America/New_York
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    uses: ./.github/workflows/ingest-one-exchange.yml
+    with:
+      exchange: NYSE
+      timezone: America/New_York
+      pre_auction_deadline: '16:00'
+    secrets:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
